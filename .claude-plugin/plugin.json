@@ -1,0 +1,9 @@
+{
+  "name": "fix-pr",
+  "version": "1.0.0",
+  "description": "Fix PR issues from review comments, test failures, and missing docs",
+  "author": { "name": "DeployHQ" },
+  "repository": "https://github.com/deployhq/claude-fix-pr",
+  "license": "MIT",
+  "keywords": ["pr", "fix", "ci", "review", "testing"]
+}
