@@ -87,41 +87,36 @@ if [[ ${#DIFF} -gt 50000 ]]; then
 ... [diff truncated at 50K chars — full diff available via \`gh pr diff $PR_NUMBER\`]"
 fi
 
-# --- Fill template ---
-OUTPUT="$TEMPLATE"
-OUTPUT="${OUTPUT//\{\{PR_NUMBER\}\}/$PR_NUMBER}"
-OUTPUT="${OUTPUT//\{\{BRANCH\}\}/$BRANCH}"
-OUTPUT="${OUTPUT//\{\{REPO\}\}/$REPO}"
+# --- Fill template using temp files (safe for multi-line content) ---
+TMPDIR_CTX=$(mktemp -d)
+trap 'rm -rf "$TMPDIR_CTX"' EXIT
 
-# Use awk for multi-line replacements
-OUTPUT=$(echo "$OUTPUT" | awk -v val="$ALL_COMMENTS" '{gsub(/\{\{REVIEW_COMMENTS\}\}/, val)}1')
-OUTPUT=$(echo "$OUTPUT" | awk -v val="$CI_FAILURES" '{gsub(/\{\{CI_FAILURES\}\}/, val)}1')
-OUTPUT=$(echo "$OUTPUT" | awk -v val="$DOC_COMMENTS" '{gsub(/\{\{DOC_COMMENTS\}\}/, val)}1')
+echo "$TEMPLATE" > "$TMPDIR_CTX/template"
+echo "$ALL_COMMENTS" > "$TMPDIR_CTX/review_comments"
+echo "$CI_FAILURES" > "$TMPDIR_CTX/ci_failures"
+echo "$DOC_COMMENTS" > "$TMPDIR_CTX/doc_comments"
+echo "$DIFF" > "$TMPDIR_CTX/diff"
 
-# Diff can be huge — use perl for safe substitution
-OUTPUT=$(echo "$OUTPUT" | perl -0777 -pe "
-  BEGIN { \$diff = join('', <STDIN>); }
-" 2>/dev/null || echo "$OUTPUT")
-
-# For the diff, use a file-based approach to handle large content
-PROMPT_FILE=$(mktemp)
-echo "$OUTPUT" | sed 's/{{DIFF}}/DIFF_PLACEHOLDER/' > "$PROMPT_FILE"
-
-DIFF_FILE=$(mktemp)
-echo "$DIFF" > "$DIFF_FILE"
-
-# Replace placeholder with actual diff
 python3 -c "
-import sys
-with open('$PROMPT_FILE', 'r') as f:
-    content = f.read()
-with open('$DIFF_FILE', 'r') as f:
-    diff = f.read()
-print(content.replace('DIFF_PLACEHOLDER', diff))
-" 2>/dev/null || {
-  # Fallback: just concatenate if python3 isn't available
-  sed 's/DIFF_PLACEHOLDER//' "$PROMPT_FILE"
-  echo "$DIFF"
+import os, sys
+d = sys.argv[1]
+with open(os.path.join(d, 'template')) as f:
+    t = f.read()
+replacements = {
+    '{{PR_NUMBER}}': '$PR_NUMBER',
+    '{{BRANCH}}': '$BRANCH',
+    '{{REPO}}': '$REPO',
 }
-
-rm -f "$PROMPT_FILE" "$DIFF_FILE"
+for placeholder, value in replacements.items():
+    t = t.replace(placeholder, value)
+file_replacements = {
+    '{{REVIEW_COMMENTS}}': 'review_comments',
+    '{{CI_FAILURES}}': 'ci_failures',
+    '{{DOC_COMMENTS}}': 'doc_comments',
+    '{{DIFF}}': 'diff',
+}
+for placeholder, filename in file_replacements.items():
+    with open(os.path.join(d, filename)) as f:
+        t = t.replace(placeholder, f.read().strip())
+print(t)
+" "$TMPDIR_CTX"
