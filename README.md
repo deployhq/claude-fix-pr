@@ -43,6 +43,31 @@ That's it. The action will:
 
 ## How It Works
 
+```mermaid
+flowchart TD
+    A["/fix-pr comment on PR"] --> B["React with eyes emoji"]
+    C["CI fails on PR branch"] --> D{Protected branch?}
+    B --> D
+
+    D -- Yes --> E["Skip — refuse to modify"]
+    D -- No --> F["Gather PR context via gh CLI"]
+
+    F --> G["Review comments"]
+    F --> H["CI failure logs"]
+    F --> I["Documentation feedback"]
+    F --> J["PR diff"]
+
+    G & H & I & J --> K["Fill prompt template"]
+    K --> L["Run Claude Code with scoped tools"]
+    L --> M{Changes made?}
+
+    M -- Yes --> N["Commit & push fixes"]
+    N --> O["Post summary comment on PR"]
+    M -- No --> P["Comment: no issues found"]
+```
+
+### Steps
+
 1. **Gathers context** — review comments, CI failures, documentation feedback, and PR diff using `gh` CLI
 2. **Builds a prompt** — fills a shared template with all gathered context
 3. **Runs Claude** — Claude reads the context and makes targeted fixes
